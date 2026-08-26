@@ -1,0 +1,146 @@
+/// Maps to `orders` in this project's schema — note this is a DIFFERENT
+/// shape than RolandRushApp's `orders` table (no rider_id/current_step/
+/// delivery_otp here; this schema uses agent_id and a simpler
+/// pending→preparing→ready→delivered status instead of the customer app's
+/// 4-step rider flow). Another sign the two backends have drifted.
+enum VendorOrderStatus { pending, preparing, ready, delivered, cancelled }
+
+VendorOrderStatus _statusFromString(String? s) {
+  switch (s) {
+    case 'preparing':
+      return VendorOrderStatus.preparing;
+    case 'ready':
+      return VendorOrderStatus.ready;
+    case 'delivered':
+      return VendorOrderStatus.delivered;
+    case 'cancelled':
+      return VendorOrderStatus.cancelled;
+    default:
+      return VendorOrderStatus.pending;
+  }
+}
+
+extension VendorOrderStatusX on VendorOrderStatus {
+  String get value => name;
+
+  String get label {
+    switch (this) {
+      case VendorOrderStatus.pending:
+        return 'New';
+      case VendorOrderStatus.preparing:
+        return 'Preparing';
+      case VendorOrderStatus.ready:
+        return 'Ready for Pickup';
+      case VendorOrderStatus.delivered:
+        return 'Delivered';
+      case VendorOrderStatus.cancelled:
+        return 'Cancelled';
+    }
+  }
+
+  /// Label for the one-tap "advance" button, or null if this is a terminal state.
+  String? get advanceLabel {
+    switch (this) {
+      case VendorOrderStatus.pending:
+        return 'Accept order';
+      case VendorOrderStatus.preparing:
+        return 'Mark ready';
+      case VendorOrderStatus.ready:
+        return 'Handed to rider';
+      default:
+        return null;
+    }
+  }
+
+  /// What the vendor can move an order to from here.
+  VendorOrderStatus? get next {
+    switch (this) {
+      case VendorOrderStatus.pending:
+        return VendorOrderStatus.preparing;
+      case VendorOrderStatus.preparing:
+        return VendorOrderStatus.ready;
+      case VendorOrderStatus.ready:
+        return VendorOrderStatus.delivered; // typically rider/agent pickup triggers this instead
+      default:
+        return null;
+    }
+  }
+}
+
+class OrderLineItem {
+  final String name;
+  final int quantity;
+  final double price;
+  const OrderLineItem({required this.name, required this.quantity, required this.price});
+
+  factory OrderLineItem.fromJson(Map<String, dynamic> json) => OrderLineItem(
+        name: json['name'] as String? ?? '',
+        quantity: (json['quantity'] as num?)?.toInt() ?? 1,
+        price: (json['price'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+class VendorOrder {
+  final String id;
+  final String vendorId;
+  final String? customerName;
+  final String? customerPhone;
+  final String? deliveryAddress;
+  final List<OrderLineItem> items;
+  final double totalAmount;
+  final double? subtotal;
+  final double? commissionRateApplied;
+  final double commissionAmount;
+  final VendorOrderStatus status;
+  final String paymentStatus;
+  final String? notes;
+  final DateTime createdAt;
+
+  const VendorOrder({
+    required this.id,
+    required this.vendorId,
+    this.customerName,
+    this.customerPhone,
+    this.deliveryAddress,
+    this.items = const [],
+    required this.totalAmount,
+    this.subtotal,
+    this.commissionRateApplied,
+    this.commissionAmount = 0,
+    required this.status,
+    this.paymentStatus = 'pending',
+    this.notes,
+    required this.createdAt,
+  });
+
+  /// Falls back to computing subtotal from line items if the column
+  /// wasn't set (orders placed before checkout math was wired up).
+  double get effectiveSubtotal => subtotal ?? items.fold<double>(0, (s, l) => s + l.price * l.quantity);
+
+  /// What the vendor actually receives once commission is deducted —
+  /// delivery fee goes to the rider, service fee to the platform, neither
+  /// belongs in the vendor's payout.
+  double get netPayout => effectiveSubtotal - (commissionAmount > 0 ? commissionAmount : effectiveSubtotal * (commissionRateApplied ?? 0));
+
+  factory VendorOrder.fromSupabase(Map<String, dynamic> row) {
+    return VendorOrder(
+      id: row['id'] as String,
+      vendorId: row['vendor_id'] as String,
+      customerName: row['customer_name'] as String?,
+      customerPhone: row['customer_phone'] as String?,
+      deliveryAddress: row['delivery_address'] as String?,
+      items: (row['items'] as List?)
+              ?.map((i) => OrderLineItem.fromJson(i as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      totalAmount: (row['total_amount'] as num).toDouble(),
+      subtotal: (row['subtotal'] as num?)?.toDouble(),
+      commissionRateApplied: (row['commission_rate_applied'] as num?)?.toDouble(),
+      commissionAmount: (row['commission_amount'] as num?)?.toDouble() ?? 0,
+      status: _statusFromString(row['status'] as String?),
+      paymentStatus: row['payment_status'] as String? ?? 'pending',
+      notes: row['notes'] as String?,
+      createdAt: DateTime.parse(row['created_at'] as String),
+    );
+  }
+}

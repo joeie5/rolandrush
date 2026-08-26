@@ -1,0 +1,53 @@
+# Never commit the starter/UI export zips or their exploded source dirs
+*.zip
+customer_app_ui_src/
+vendor_app_ui_src/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.*.example
+supabase/.env.r2
+scripts/r2-migration/set-env.ps1
+
+# Flutter / Dart
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/build/
+**/android/.gradle/
+**/android/local.properties
+**/android/app/.cxx/
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework/
+**/ios/Flutter/Flutter.podspec
+**/*.g.dart.bak
+**/pubspec.lock.bak
+
+# Node / Vite / React
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/*.local
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+*.log
+logs

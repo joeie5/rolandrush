@@ -1,0 +1,9 @@
+{
+  "name": "r2-menu-media-migration",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.685.0",
+    "@supabase/supabase-js": "^2.45.4"
+  }
+}
