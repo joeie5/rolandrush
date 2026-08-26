@@ -14,4 +14,5 @@ class SupabaseService {
   }
 
   static String? get currentUserId => client.auth.currentUser?.id;
+  static bool get isSignedIn => client.auth.currentUser != null;
 }

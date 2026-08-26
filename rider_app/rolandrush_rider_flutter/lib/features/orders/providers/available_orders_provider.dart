@@ -10,19 +10,9 @@ class AvailableOrdersState {
   final OrderFilter filter;
   final String? error;
 
-  const AvailableOrdersState({
-    this.orders = const [],
-    this.isLoading = false,
-    this.filter = OrderFilter.all,
-    this.error,
-  });
+  const AvailableOrdersState({this.orders = const [], this.isLoading = false, this.filter = OrderFilter.all, this.error});
 
-  AvailableOrdersState copyWith({
-    List<DeliveryOrder>? orders,
-    bool? isLoading,
-    OrderFilter? filter,
-    String? error,
-  }) {
+  AvailableOrdersState copyWith({List<DeliveryOrder>? orders, bool? isLoading, OrderFilter? filter, String? error}) {
     return AvailableOrdersState(
       orders: orders ?? this.orders,
       isLoading: isLoading ?? this.isLoading,
@@ -31,10 +21,12 @@ class AvailableOrdersState {
     );
   }
 
-  /// "nearby"/"high-pay" sorting needs rider lat/lng + a distance calc
-  /// (Supabase has PostGIS via rider_locations already, so this can move
-  /// server-side with an RPC once that's written). For now, high-pay
-  /// sorts client-side by deliveryFee descending.
+  /// "Nearby" needs rider lat/lng vs order pickup-location distance — the
+  /// schema's `rider_locations` table has a PostGIS `geography` column, so
+  /// a real implementation should be a `nearby_orders(lat, lng, radius)`
+  /// Postgres RPC rather than client-side math without coordinates on the
+  /// order row itself. Left as a no-op filter (same list) until that RPC
+  /// exists — flagged rather than faked.
   List<DeliveryOrder> get filtered {
     switch (filter) {
       case OrderFilter.highPay:
@@ -46,9 +38,13 @@ class AvailableOrdersState {
   }
 }
 
-/// Job board: orders with status 'pending' and no rider assigned yet.
-/// Matches AvailableOrders.tsx, but reading real `orders` rows instead of
-/// the 6 hardcoded mock jobs.
+/// Job board: orders ready for pickup with no rider assigned yet. Ports
+/// Jobs.tsx, backed by real `orders` rows instead of the mock job list.
+///
+/// Status value fix vs. the first cut of this provider: the vendor app
+/// marks an order `ready` (not `pending`) once it's cooked and awaiting a
+/// rider — `pending`/`preparing` orders haven't been accepted by the
+/// vendor yet and shouldn't show up here.
 class AvailableOrdersNotifier extends StateNotifier<AvailableOrdersState> {
   AvailableOrdersNotifier() : super(const AvailableOrdersState()) {
     load();
@@ -60,13 +56,11 @@ class AvailableOrdersNotifier extends StateNotifier<AvailableOrdersState> {
       final res = await SupabaseService.client
           .from('orders')
           .select()
-          .eq('status', 'pending')
+          .eq('status', 'ready')
           .filter('rider_id', 'is', null)
           .order('created_at', ascending: false);
 
-      final orders = (res as List)
-          .map((row) => DeliveryOrder.fromSupabase(row as Map<String, dynamic>))
-          .toList();
+      final orders = (res as List).map((row) => DeliveryOrder.fromSupabase(row as Map<String, dynamic>)).toList();
       state = state.copyWith(orders: orders, isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -75,27 +69,29 @@ class AvailableOrdersNotifier extends StateNotifier<AvailableOrdersState> {
 
   void setFilter(OrderFilter filter) => state = state.copyWith(filter: filter);
 
-  /// Accepting an order assigns this rider and flips status — should
-  /// really be a single RPC/transaction server-side to avoid two riders
-  /// racing to accept the same order (first-write-wins isn't safe done
-  /// as a plain update from the client). Flagging as a TODO rather than
-  /// a real fix here.
+  /// Assigns this rider and starts the current_step machine at 1 (en route
+  /// to vendor). Guarded by `rider_id is null` so it only succeeds if no
+  /// other rider grabbed it first — still a plain client update racing on
+  /// two simultaneous taps though; a real fix is a `accept_order(order_id,
+  /// rider_id)` Postgres function using `UPDATE ... WHERE rider_id IS NULL
+  /// RETURNING *`, called via RPC. Flagged, not fixed, here.
   Future<bool> acceptOrder(String orderId, String riderId) async {
     try {
-      await SupabaseService.client.from('orders').update({
-        'rider_id': riderId,
-        'status': 'accepted',
-        'current_step': 1,
-      }).eq('id', orderId).filter('rider_id', 'is', null); // only succeeds if still unassigned
-      await load();
-      return true;
+      final rows = await SupabaseService.client
+          .from('orders')
+          .update({'rider_id': riderId, 'current_step': 1})
+          .eq('id', orderId)
+          .filter('rider_id', 'is', null)
+          .select();
+      final accepted = (rows as List).isNotEmpty;
+      if (accepted) await load();
+      return accepted;
     } catch (_) {
       return false;
     }
   }
 }
 
-final availableOrdersProvider =
-    StateNotifierProvider<AvailableOrdersNotifier, AvailableOrdersState>(
+final availableOrdersProvider = StateNotifierProvider<AvailableOrdersNotifier, AvailableOrdersState>(
   (ref) => AvailableOrdersNotifier(),
 );

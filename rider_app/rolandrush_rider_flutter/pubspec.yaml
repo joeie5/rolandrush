@@ -14,8 +14,14 @@ dependencies:
   # State management
   flutter_riverpod: ^2.5.1
 
+  # Routing
+  go_router: ^14.2.7
+
   # Backend
   supabase_flutter: ^2.5.6
+
+  # Document preview picker (no upload backend yet — see Documents screen)
+  image_picker: ^1.1.2
 
   # Maps / location (swap in your preferred provider — Google Maps Flutter
   # or Mapbox both work; geolocator is provider-agnostic for reading GPS)
