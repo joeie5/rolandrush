@@ -2,6 +2,7 @@
 *.zip
 customer_app_ui_src/
 vendor_app_ui_src/
+rider_app_ui_src/
 
 # Secrets — never commit
 .env
