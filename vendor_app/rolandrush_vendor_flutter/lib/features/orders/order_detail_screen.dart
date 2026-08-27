@@ -158,17 +158,58 @@ class OrderDetailScreen extends ConsumerWidget {
                             for (final line in order.items)
                               Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 4),
-                                child: Row(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      width: 24, height: 24,
-                                      decoration: BoxDecoration(color: AppColors.canvas, borderRadius: BorderRadius.circular(8)),
-                                      alignment: Alignment.center,
-                                      child: Text('${line.quantity}', style: AppTheme.num(size: 11, weight: FontWeight.w800)),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 24, height: 24,
+                                          decoration: BoxDecoration(color: AppColors.canvas, borderRadius: BorderRadius.circular(8)),
+                                          alignment: Alignment.center,
+                                          child: Text('${line.quantity}', style: AppTheme.num(size: 11, weight: FontWeight.w800)),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(child: Text(line.name, style: AppTheme.sans(size: 14, weight: FontWeight.w500))),
+                                        Text(naira(line.price * line.quantity), style: AppTheme.num(size: 14, weight: FontWeight.w700)),
+                                      ],
                                     ),
-                                    const SizedBox(width: 10),
-                                    Expanded(child: Text(line.name, style: AppTheme.sans(size: 14, weight: FontWeight.w500))),
-                                    Text(naira(line.price * line.quantity), style: AppTheme.num(size: 14, weight: FontWeight.w700)),
+                                    // Add-ons were being silently dropped
+                                    // here — the customer's order carries
+                                    // them (checkout writes add_ons per
+                                    // line), but this screen never parsed
+                                    // or showed them, so a vendor had no
+                                    // way to see e.g. "extra beef" the
+                                    // customer actually paid for and
+                                    // expects in the bag.
+                                    if (line.addOns.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 34, top: 2),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            for (final addOn in line.addOns)
+                                              Padding(
+                                                padding: const EdgeInsets.only(top: 1),
+                                                child: Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text(
+                                                        '+ ${addOn.quantity}× ${addOn.name}',
+                                                        style: AppTheme.sans(size: 12, weight: FontWeight.w500, color: AppColors.inkSubtle),
+                                                      ),
+                                                    ),
+                                                    if (addOn.price > 0)
+                                                      Text(
+                                                        naira(addOn.price * addOn.quantity),
+                                                        style: AppTheme.num(size: 12, weight: FontWeight.w600, color: AppColors.inkSubtle),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),

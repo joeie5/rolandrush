@@ -88,15 +88,36 @@ extension VendorOrderStatusX on VendorOrderStatus {
       this == VendorOrderStatus.placed || this == VendorOrderStatus.preparing || this == VendorOrderStatus.ready;
 }
 
+class OrderLineAddOn {
+  final String name;
+  final int quantity;
+  final double price;
+  const OrderLineAddOn({required this.name, required this.quantity, required this.price});
+
+  factory OrderLineAddOn.fromJson(Map<String, dynamic> json) => OrderLineAddOn(
+        name: json['name'] as String? ?? '',
+        quantity: (json['quantity'] as num?)?.toInt() ?? 1,
+        price: (json['price'] as num?)?.toDouble() ?? 0,
+      );
+}
+
 class OrderLineItem {
   final String name;
   final int quantity;
   final double price;
-  const OrderLineItem({required this.name, required this.quantity, required this.price});
+  final List<OrderLineAddOn> addOns;
+  const OrderLineItem({required this.name, required this.quantity, required this.price, this.addOns = const []});
 
+  // The customer app writes add-ons under 'add_ons'; a handful of older
+  // rows (seeded before that key existed) use 'addons' instead — read
+  // either so this doesn't silently drop add-ons on real historical orders.
   factory OrderLineItem.fromJson(Map<String, dynamic> json) => OrderLineItem(
         name: json['name'] as String? ?? '',
         quantity: (json['quantity'] as num?)?.toInt() ?? 1,
+        addOns: ((json['add_ons'] ?? json['addons']) as List?)
+                ?.map((a) => OrderLineAddOn.fromJson(a as Map<String, dynamic>))
+                .toList() ??
+            const [],
         price: (json['price'] as num?)?.toDouble() ?? 0,
       );
 }
