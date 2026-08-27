@@ -94,6 +94,7 @@ export const serviceZones: ServiceZone[] = [
 export const feeRules: FeeRule[] = [
 {
   id: 'f_osogbo',
+  serviceAreaId: 'mock',
   name: 'Osogbo standard',
   zone: 'Osogbo Central',
   baseFee: 900,
@@ -105,6 +106,7 @@ export const feeRules: FeeRule[] = [
 },
 {
   id: 'f_osogbo_peak',
+  serviceAreaId: 'mock',
   name: 'Osogbo evening peak (6–9pm)',
   zone: 'Osogbo Central',
   baseFee: 900,
@@ -116,6 +118,7 @@ export const feeRules: FeeRule[] = [
 },
 {
   id: 'f_ife',
+  serviceAreaId: 'mock',
   name: 'Ile-Ife standard',
   zone: 'Ile-Ife',
   baseFee: 1100,
@@ -127,6 +130,7 @@ export const feeRules: FeeRule[] = [
 },
 {
   id: 'f_ilesa',
+  serviceAreaId: 'mock',
   name: 'Ilesa standard',
   zone: 'Ilesa',
   baseFee: 800,
@@ -138,6 +142,7 @@ export const feeRules: FeeRule[] = [
 },
 {
   id: 'f_ede',
+  serviceAreaId: 'mock',
   name: 'Ede standard',
   zone: 'Ede',
   baseFee: 700,
@@ -149,6 +154,7 @@ export const feeRules: FeeRule[] = [
 },
 {
   id: 'f_rain',
+  serviceAreaId: 'mock',
   name: 'Rain surcharge (all live zones)',
   zone: 'All live zones',
   baseFee: 0,

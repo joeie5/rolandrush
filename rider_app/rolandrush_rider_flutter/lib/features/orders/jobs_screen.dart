@@ -6,6 +6,7 @@ import '../../widgets/app_screen.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/job_card.dart';
 import '../dashboard/rider_status_provider.dart';
+import '../delivery/providers/active_delivery_provider.dart';
 import 'providers/available_orders_provider.dart';
 
 /// Ports Jobs.tsx.
@@ -101,6 +102,16 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                           final ok = await notifier.acceptOrder(job.id, profile.id);
                           if (!mounted) return;
                           if (ok) {
+                            // riderActiveOrderProvider is a plain
+                            // FutureProvider that only ever evaluates
+                            // once and caches its result — without this,
+                            // Home's "delivery in progress" banner and
+                            // the ActiveDelivery screen we're about to
+                            // navigate to both keep showing the stale
+                            // "no active delivery" result from before
+                            // this accept, even though the DB write
+                            // itself succeeded.
+                            ref.invalidate(riderActiveOrderProvider);
                             context.push('/delivery/active');
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Another rider already took this one.')));

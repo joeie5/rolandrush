@@ -63,6 +63,11 @@ class _DeliveryConfirmScreenState extends ConsumerState<DeliveryConfirmScreen> {
                       if (!mounted) return;
                       setState(() => confirming = false);
                       if (ok) {
+                        // Same staleness issue as jobs_screen.dart's
+                        // accept flow — without this, Home would keep
+                        // showing "delivery in progress" for an order
+                        // that's actually already delivered.
+                        ref.invalidate(riderActiveOrderProvider);
                         context.go('/delivery/success', extra: order.deliveryFee);
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Incorrect code. Ask the customer to double-check it.')));

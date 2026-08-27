@@ -98,6 +98,7 @@ interface AdminState {
 
   addServiceZone: (state: string, city: string) => Promise<void>;
   toggleServiceZone: (id: string, isActive: boolean) => Promise<void>;
+  updateServiceZone: (id: string, state: string, city: string) => Promise<void>;
   addFeeRule: (serviceAreaId: string, baseFee: number, perKmRate: number, minOrderValue: number) => Promise<void>;
   toggleFeeRule: (id: string, active: boolean) => Promise<void>;
   updateFeeRule: (id: string, baseFee: number, perKmRate: number) => Promise<void>;
@@ -344,7 +345,31 @@ export function AdminProvider({ children }: {children: React.ReactNode;}) {
       setModeration(moderationItems);
 
       const zoneRows = serviceAreasRes.data ?? [];
-      setServiceZones(zoneRows.map(mapServiceZone));
+      // Real counts, matched on city (the only geography field both
+      // service_areas and vendor_profiles/orders actually have in
+      // common) — riders aren't included, see mapServiceZone's comment.
+      const vendorsByCity = new Map<string, number>();
+      vendorRows.forEach((v: any) => {
+        if (!v.city) return;
+        vendorsByCity.set(v.city, (vendorsByCity.get(v.city) ?? 0) + 1);
+      });
+      const vendorCityById = new Map(vendorRows.map((v: any) => [v.id, v.city]));
+      const since7d = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const ordersByCity = new Map<string, number>();
+      orderRows.forEach((o: any) => {
+        if (new Date(o.created_at).getTime() <= since7d) return;
+        const city = vendorCityById.get(o.vendor_id);
+        if (!city) return;
+        ordersByCity.set(city, (ordersByCity.get(city) ?? 0) + 1);
+      });
+      setServiceZones(
+        zoneRows.map((z: any) =>
+          mapServiceZone(z, {
+            vendors: vendorsByCity.get(z.city) ?? 0,
+            orders7d: ordersByCity.get(z.city) ?? 0
+          })
+        )
+      );
       const zoneById = new Map(zoneRows.map((z: any) => [z.id, [z.city, z.state].filter(Boolean).join(', ')]));
       setFeeRules((feeRulesRes.data ?? []).map((f: any) => mapFeeRule(f, zoneById.get(f.service_area_id) ?? '—')));
 
@@ -556,6 +581,25 @@ export function AdminProvider({ children }: {children: React.ReactNode;}) {
     [writeAudit]
   );
 
+  const updateServiceZone = React.useCallback(
+    async (id: string, state: string, city: string) => {
+      const { error } = await supabase.from('service_areas').update({ state, city }).eq('id', id);
+      if (error) {
+        toast.error('Could not update zone', { description: error.message });
+        return;
+      }
+      // Editing city changes which vendors/orders count toward this zone
+      // (matched on city, see reload's vendorsByCity/ordersByCity) — a
+      // full reload keeps those numbers honest rather than patching the
+      // local zone object and leaving stale counts on screen.
+      setServiceZones((c) => c.map((z) => z.id === id ? { ...z, name: city, city } : z));
+      await writeAudit('service_area_updated', 'service_areas', id, `${city}, ${state}`);
+      toast.success(`${city} updated`);
+      await reload();
+    },
+    [writeAudit, reload]
+  );
+
   const addFeeRule = React.useCallback(
     async (serviceAreaId: string, baseFee: number, perKmRate: number, minOrderValue: number) => {
       const { data, error } = await supabase.
@@ -695,6 +739,7 @@ export function AdminProvider({ children }: {children: React.ReactNode;}) {
     logAction,
     addServiceZone,
     toggleServiceZone,
+    updateServiceZone,
     addFeeRule,
     toggleFeeRule,
     updateFeeRule,

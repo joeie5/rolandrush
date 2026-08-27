@@ -269,6 +269,7 @@ export interface ServiceZone {
 
 export interface FeeRule {
   id: string;
+  serviceAreaId: string;
   name: string;
   zone: string;
   baseFee: number;

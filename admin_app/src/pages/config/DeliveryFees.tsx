@@ -1,5 +1,5 @@
 import React from 'react';
-import { InfoIcon } from 'lucide-react';
+import { InfoIcon, PlusIcon } from 'lucide-react';
 import { useAdmin } from '../../contexts/AdminContext';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Panel, PanelHeader } from '../../components/ui/Panel';
@@ -15,7 +15,7 @@ import {
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
-import { TextInput, Toggle } from '../../components/ui/Field';
+import { Select, TextInput, Toggle } from '../../components/ui/Field';
 import { DecisionDialog, useDecision } from '../../components/ui/DecisionDialog';
 import { naira } from '../../utils/format';
 import type { FeeRule } from '../../types';
@@ -23,11 +23,17 @@ import type { FeeRule } from '../../types';
 export function DeliveryFees() {
   // maxFee/surgeMultiplier have no backing column on delivery_fee_rules —
   // shown as 0/1× (i.e. "no cap" / "no surge") since real rows never set them.
-  const { logAction, feeRules: rules, toggleFeeRule, updateFeeRule } = useAdmin();
+  const { logAction, feeRules: rules, serviceZones, toggleFeeRule, updateFeeRule, addFeeRule } = useAdmin();
   const decision = useDecision();
   const [editing, setEditing] = React.useState<FeeRule | null>(null);
   const [base, setBase] = React.useState('');
   const [perKm, setPerKm] = React.useState('');
+
+  const [addOpen, setAddOpen] = React.useState(false);
+  const [newZoneId, setNewZoneId] = React.useState('');
+  const [newBase, setNewBase] = React.useState('700');
+  const [newPerKm, setNewPerKm] = React.useState('100');
+  const [newMinOrder, setNewMinOrder] = React.useState('0');
 
   const openEdit = (rule: FeeRule) => {
     setEditing(rule);
@@ -45,8 +51,13 @@ export function DeliveryFees() {
     <>
       <PageHeader
         title="Delivery fee rules"
-        subtitle="What the customer pays for delivery, per zone. Changes apply to the next order placed — orders already in flight keep the fee they were quoted." />
-      
+        subtitle="What the customer pays for delivery, per zone. Changes apply to the next order placed — orders already in flight keep the fee they were quoted."
+        actions={
+        <Button variant="primary" icon={PlusIcon} onClick={() => setAddOpen(true)}>
+            Add fee rule
+          </Button>
+        } />
+
 
       <div className="grid grid-cols-12 gap-4">
         <div className="col-span-12 xl:col-span-8">
@@ -273,6 +284,54 @@ export function DeliveryFees() {
             </p>
           </> :
         null}
+      </Modal>
+
+      <Modal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="Add a fee rule"
+        description="One rule per zone. Base fee + per-km rate is what a customer in that zone is charged at checkout."
+        footer={
+        <>
+            <Button variant="ghost" onClick={() => setAddOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+            variant="primary"
+            disabled={!newZoneId}
+            onClick={() => {
+              addFeeRule(newZoneId, Number(newBase) || 0, Number(newPerKm) || 0, Number(newMinOrder) || 0);
+              setNewZoneId('');
+              setNewBase('700');
+              setNewPerKm('100');
+              setNewMinOrder('0');
+              setAddOpen(false);
+            }}>
+
+              Create rule
+            </Button>
+          </>
+        }>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <label className="mb-1 block text-sm font-medium text-ink">
+              Service zone<span className="ml-1 text-coral">*</span>
+            </label>
+            <Select
+              label="Service zone"
+              value={newZoneId}
+              onChange={setNewZoneId}
+              options={[
+              { value: '', label: 'Select a zone' },
+              ...serviceZones.map((z) => ({ value: z.id, label: `${z.name} (${z.city})` }))]
+              } />
+
+          </div>
+          <TextInput label="Base fee" prefix="₦" value={newBase} onChange={setNewBase} />
+          <TextInput label="Per kilometre" prefix="₦" value={newPerKm} onChange={setNewPerKm} />
+          <TextInput label="Minimum order value" prefix="₦" value={newMinOrder} onChange={setNewMinOrder} />
+        </div>
       </Modal>
 
       <DecisionDialog request={decision.request} onClose={decision.close} />

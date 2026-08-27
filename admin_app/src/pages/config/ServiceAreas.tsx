@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPinIcon, PlusIcon } from 'lucide-react';
+import { MapPinIcon, PencilIcon, PlusIcon } from 'lucide-react';
 import { useAdmin } from '../../contexts/AdminContext';
 import { PageHeader } from '../../components/ui/PageHeader';
 import {
@@ -23,13 +23,23 @@ export function ServiceAreas() {
   // real service_areas columns are just state/city/is_active — radius/
   // baseFee/vendors/riders/orders7d have no backing column yet (base fee
   // lives on delivery_fee_rules instead), so those fields stay UI-only.
-  const { logAction, serviceZones: zones, toggleServiceZone, addServiceZone } = useAdmin();
+  const { logAction, serviceZones: zones, feeRules, toggleServiceZone, addServiceZone, updateServiceZone } = useAdmin();
   const decision = useDecision();
   const [addOpen, setAddOpen] = React.useState(false);
   const [name, setName] = React.useState('');
   const [city, setCity] = React.useState('');
   const [radius, setRadius] = React.useState('5');
   const [baseFee, setBaseFee] = React.useState('750');
+
+  const [editingZone, setEditingZone] = React.useState<ServiceZone | null>(null);
+  const [editName, setEditName] = React.useState('');
+  const [editCity, setEditCity] = React.useState('');
+
+  const openEdit = (zone: ServiceZone) => {
+    setEditingZone(zone);
+    setEditName(zone.name);
+    setEditCity(zone.city);
+  };
 
   const askStatus = (zone: ServiceZone, next: ServiceZone['status']) =>
   decision.ask({
@@ -96,7 +106,12 @@ export function ServiceAreas() {
             <TH align="right" width="140px" />
           </THead>
           <TBody>
-            {zones.map((zone) =>
+            {zones.map((zone) => {
+            // service_areas has no base_fee column of its own — the real
+            // value lives on delivery_fee_rules, matched here by
+            // serviceAreaId so this cell isn't just a permanent 0.
+            const feeRule = feeRules.find((f) => f.serviceAreaId === zone.id);
+            return (
             <TR key={zone.id}>
                 <TD className="font-medium text-ink">{zone.name}</TD>
                 <TD>{zone.city}</TD>
@@ -110,7 +125,7 @@ export function ServiceAreas() {
                   {zone.orders7d.toLocaleString('en-NG')}
                 </TD>
                 <TD align="right" className="tabular">
-                  {naira(zone.baseFee)}
+                  {feeRule ? naira(feeRule.baseFee) : '—'}
                 </TD>
                 <TD align="right" className="tabular">
                   {zone.radiusKm} km
@@ -119,26 +134,32 @@ export function ServiceAreas() {
                   <StatusBadge status={zone.status} />
                 </TD>
                 <TD align="right">
-                  {zone.status === 'live' ?
-                <Button
-                  size="sm"
-                  variant="danger"
-                  onClick={() => askStatus(zone, 'paused')}>
-                  
-                      Pause
-                    </Button> :
-
-                <Button
-                  size="sm"
-                  variant="approve"
-                  onClick={() => askStatus(zone, 'live')}>
-                  
-                      Open
+                  <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="ghost" icon={PencilIcon} onClick={() => openEdit(zone)}>
+                      Edit
                     </Button>
-                }
+                    {zone.status === 'live' ?
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => askStatus(zone, 'paused')}>
+
+                        Pause
+                      </Button> :
+
+                  <Button
+                    size="sm"
+                    variant="approve"
+                    onClick={() => askStatus(zone, 'live')}>
+
+                        Open
+                      </Button>
+                  }
+                  </div>
                 </TD>
               </TR>
-            )}
+            );
+            })}
           </TBody>
         </Table>
       </TableShell>
@@ -198,6 +219,51 @@ export function ServiceAreas() {
           Zone boundaries are drawn on the rider app map. This console controls
           whether the zone accepts orders and what it charges.
         </p>
+      </Modal>
+
+      <Modal
+        open={Boolean(editingZone)}
+        onClose={() => setEditingZone(null)}
+        title={editingZone ? `Edit ${editingZone.name}` : ''}
+        description="Changes which vendors/orders count toward this zone — matching is by city."
+        footer={
+        <>
+            <Button variant="ghost" onClick={() => setEditingZone(null)}>
+              Cancel
+            </Button>
+            <Button
+            variant="primary"
+            disabled={!editName.trim() || !editCity.trim()}
+            onClick={() => {
+              if (!editingZone) return;
+              updateServiceZone(editingZone.id, editName.trim(), editCity.trim());
+              setEditingZone(null);
+            }}>
+
+              Save changes
+            </Button>
+          </>
+        }>
+
+        <div className="grid grid-cols-2 gap-4">
+          <TextInput label="Zone name" required value={editName} onChange={setEditName} placeholder="Ejigbo" />
+          <div>
+            <label className="mb-1 block text-sm font-medium text-ink">
+              City<span className="ml-1 text-coral">*</span>
+            </label>
+            <Select
+              label="City"
+              value={editCity}
+              onChange={setEditCity}
+              options={[
+              { value: '', label: 'Select a city' },
+              ...['Osogbo', 'Ile-Ife', 'Ilesa', 'Ede', 'Ikirun', 'Iwo', 'Ikire', 'Gbongan', 'Ejigbo'].map(
+                (option) => ({ value: option, label: option })
+              )]
+              } />
+
+          </div>
+        </div>
       </Modal>
 
       <DecisionDialog request={decision.request} onClose={decision.close} />

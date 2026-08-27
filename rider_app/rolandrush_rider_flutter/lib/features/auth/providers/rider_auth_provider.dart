@@ -12,11 +12,23 @@ const testBypassPhone = '+2348222222222';
 const _testBypassEmail = 'devtest.8111111111@rolandrush.test';
 const _testBypassPassword = 'RolandRushDevTest_8111111111!';
 
+/// SECOND, DIFFERENT KIND of bypass — unlike [testBypassPhone] above (which
+/// signs into a synthetic, empty dev/test account), this signs into a REAL
+/// rider account ("Tunde Bakare", based in Osogbo, +2348123334455) with no
+/// OTP check, using a password set on that account via the Admin API —
+/// same pattern as the vendor app's real-tastyBites-account bypass. This
+/// is a standing OTP-free door into a real account for as long as this
+/// block exists — remove it (and clear the password back off that
+/// Supabase Auth user) before shipping, it must not reach production.
+const _realRiderBypassPhone = '+2348123334455';
+const _realRiderBypassPassword = 'RolandRushDevCheck_8123334455!';
+
 class RiderAuthNotifier extends StateNotifier<AsyncValue<void>> {
   RiderAuthNotifier() : super(const AsyncValue.data(null));
 
   Future<bool> sendOtp(String e164Phone) async {
     if (e164Phone == testBypassPhone) return true;
+    if (e164Phone == _realRiderBypassPhone) return true;
 
     state = const AsyncValue.loading();
     try {
@@ -31,6 +43,7 @@ class RiderAuthNotifier extends StateNotifier<AsyncValue<void>> {
 
   Future<bool> verifyOtp(String e164Phone, String token) async {
     if (e164Phone == testBypassPhone) return _bypassSignIn();
+    if (e164Phone == _realRiderBypassPhone) return _realRiderBypassSignIn();
 
     state = const AsyncValue.loading();
     try {
@@ -69,6 +82,23 @@ class RiderAuthNotifier extends StateNotifier<AsyncValue<void>> {
         }
       }
 
+      state = const AsyncValue.data(null);
+      return true;
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      return false;
+    }
+  }
+
+  /// See _realRiderBypassPhone doc comment — signs into a real rider
+  /// account via a temporary password, no OTP check.
+  Future<bool> _realRiderBypassSignIn() async {
+    state = const AsyncValue.loading();
+    try {
+      await SupabaseService.client.auth.signInWithPassword(
+        phone: _realRiderBypassPhone.replaceFirst('+', ''),
+        password: _realRiderBypassPassword,
+      );
       state = const AsyncValue.data(null);
       return true;
     } catch (e, st) {

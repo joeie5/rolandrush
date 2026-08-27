@@ -270,17 +270,26 @@ export function mapAudit(row: Record<string, any>, actorName: string): AuditEntr
   };
 }
 
-export function mapServiceZone(row: Record<string, any>): ServiceZone {
+export function mapServiceZone(
+  row: Record<string, any>,
+  counts?: { vendors: number; orders7d: number }
+): ServiceZone {
   return {
     id: row.id,
     name: row.city ?? row.state ?? 'Unnamed',
     city: row.city ?? '—',
     status: row.is_active ? 'live' : 'paused',
-    // vendor/rider counts and 7-day order volume per zone aren't tracked
-    // yet — would need a live aggregate query joined on vendor city/state.
-    vendors: 0,
+    vendors: counts?.vendors ?? 0,
+    // rider_profiles has no city/state column at all, so a rider can't be
+    // matched to a zone today — approximating via free-text `address`
+    // would be exactly the kind of fabricated-looking number this
+    // codebase has deliberately avoided elsewhere. Stays 0 until riders
+    // have a real zone/city field to join on.
     riders: 0,
-    orders7d: 0,
+    orders7d: counts?.orders7d ?? 0,
+    // service_areas has no base_fee/radius columns — base fee actually
+    // lives on delivery_fee_rules (a separate table/screen), and there's
+    // no radius concept in the schema at all.
     baseFee: 0,
     radiusKm: 0
   };
@@ -289,6 +298,7 @@ export function mapServiceZone(row: Record<string, any>): ServiceZone {
 export function mapFeeRule(row: Record<string, any>, zoneLabel: string): FeeRule {
   return {
     id: row.id,
+    serviceAreaId: row.service_area_id,
     name: zoneLabel,
     zone: zoneLabel,
     baseFee: Number(row.base_fee) || 0,
