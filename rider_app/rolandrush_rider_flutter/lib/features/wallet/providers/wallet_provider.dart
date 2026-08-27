@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/supabase_service.dart';
 import '../../../core/providers/platform_settings_provider.dart';
 import '../../../models/rider_profile.dart';
@@ -51,6 +52,33 @@ class WalletState {
 class WalletNotifier extends StateNotifier<WalletState> {
   WalletNotifier() : super(const WalletState()) {
     load();
+    _subscribe();
+  }
+
+  /// Same fix as the vendor app's vendor_wallet_provider.dart — without
+  /// this, a rider's own payout (credited by complete_delivery_and_credit
+  /// when THIS rider confirms a delivery) only shows up after a full app
+  /// restart, since load() only ever ran once at construction.
+  void _subscribe() {
+    final userId = SupabaseService.currentUserId;
+    if (userId == null) return;
+    SupabaseService.client
+        .channel('rider_wallet_$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'wallets',
+          filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'user_id', value: userId),
+          callback: (_) => load(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'transactions',
+          filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'user_id', value: userId),
+          callback: (_) => load(),
+        )
+        .subscribe();
   }
 
   Future<void> load() async {

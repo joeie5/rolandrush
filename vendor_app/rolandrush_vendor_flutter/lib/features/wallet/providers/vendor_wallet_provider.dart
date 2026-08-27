@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/supabase_service.dart';
 import '../../../core/providers/platform_settings_provider.dart';
 import '../../../models/vendor_wallet.dart';
@@ -51,6 +52,35 @@ class VendorWalletState {
 class VendorWalletNotifier extends StateNotifier<VendorWalletState> {
   VendorWalletNotifier() : super(const VendorWalletState()) {
     load();
+    _subscribe();
+  }
+
+  /// Without this, new payouts never show up here without a full app
+  /// restart — order payouts are credited by the RIDER app's session
+  /// (complete_delivery_and_credit) when a delivery completes, which has
+  /// no way to tell an already-open vendor wallet screen in a different
+  /// app/session to refetch on its own. Same fix as
+  /// vendor_orders_provider.dart's realtime subscription.
+  void _subscribe() {
+    final userId = SupabaseService.currentUserId;
+    if (userId == null) return;
+    SupabaseService.client
+        .channel('vendor_wallet_$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'wallets',
+          filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'user_id', value: userId),
+          callback: (_) => load(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'transactions',
+          filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'user_id', value: userId),
+          callback: (_) => load(),
+        )
+        .subscribe();
   }
 
   Future<void> load() async {
