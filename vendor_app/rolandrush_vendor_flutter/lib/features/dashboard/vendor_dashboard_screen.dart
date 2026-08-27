@@ -6,6 +6,7 @@ import '../../core/format.dart';
 import '../../widgets/primitives.dart';
 import '../../widgets/bottom_nav.dart';
 import '../../widgets/order_card.dart';
+import '../../models/vendor_order.dart';
 import '../orders/providers/vendor_orders_provider.dart';
 import '../menu/providers/menu_manager_provider.dart';
 import '../wallet/providers/vendor_wallet_provider.dart';
@@ -225,7 +226,7 @@ class VendorDashboardScreen extends ConsumerWidget {
               ],
             ),
           ),
-          Align(alignment: Alignment.bottomCenter, child: VendorBottomNav(currentPath: '/dashboard', newOrderCount: active.where((o) => o.status.name == 'pending').length)),
+          Align(alignment: Alignment.bottomCenter, child: VendorBottomNav(currentPath: '/dashboard', newOrderCount: active.where((o) => o.status.value == 'placed').length)),
         ],
       ),
     );

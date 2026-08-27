@@ -64,59 +64,18 @@ class VendorOrdersNotifier extends StateNotifier<VendorOrdersState> {
         .subscribe();
   }
 
+  /// Vendor only ever advances placed->preparing->ready (see
+  /// VendorOrderStatus.next) — picked_up/delivering/delivered are written
+  /// by the rider app once a rider is physically involved, per the
+  /// cross-app status ownership table. Wallet crediting on delivery moved
+  /// with it: see rider_app's active_delivery_provider.dart, which now
+  /// does the commission math and pays the vendor out when the rider
+  /// confirms delivery via OTP, not when the vendor marks anything here.
   Future<void> advanceStatus(VendorOrder order) async {
     final next = order.status.next;
     if (next == null) return;
-
-    final update = <String, dynamic>{'status': next.value};
-    if (next == VendorOrderStatus.delivered) {
-      update['delivered_at'] = DateTime.now().toIso8601String();
-      // Commission is computed here, at completion, not at checkout —
-      // the customer never sees or pays it; it's deducted from the
-      // vendor's payout. commission_rate_applied was snapshotted onto the
-      // order at checkout so a later change to vendor_profiles.commission_rate
-      // doesn't retroactively change already-placed orders.
-      final rate = order.commissionRateApplied ?? 0.15;
-      final subtotal = order.effectiveSubtotal;
-      final commissionAmount = subtotal * rate;
-      update['commission_amount'] = commissionAmount;
-      await SupabaseService.client.from('orders').update(update).eq('id', order.id);
-      await _creditVendorWallet(order, commissionAmount);
-    } else {
-      await SupabaseService.client.from('orders').update(update).eq('id', order.id);
-    }
+    await SupabaseService.client.from('orders').update({'status': next.value}).eq('id', order.id);
     await load();
-  }
-
-  /// Credits (subtotal − commission), not total_amount — delivery fee goes
-  /// to whoever fulfilled delivery and service fee to the platform, neither
-  /// belongs in the vendor's payout. No DB trigger does this automatically
-  /// today, so the app has to.
-  Future<void> _creditVendorWallet(VendorOrder order, double commissionAmount) async {
-    final client = SupabaseService.client;
-    final vendorRow = await client.from('vendor_profiles').select('user_id').eq('id', vendorId).maybeSingle();
-    final userId = vendorRow?['user_id'] as String?;
-    if (userId == null) return;
-
-    final netPayout = order.effectiveSubtotal - commissionAmount;
-    if (netPayout <= 0) return;
-
-    final wallet = await client.from('wallets').select('id, balance, total_earned').eq('user_id', userId).maybeSingle();
-    if (wallet == null) {
-      await client.from('wallets').insert({'user_id': userId, 'balance': netPayout, 'total_earned': netPayout});
-    } else {
-      final newBalance = ((wallet['balance'] as num?)?.toDouble() ?? 0) + netPayout;
-      final newTotalEarned = ((wallet['total_earned'] as num?)?.toDouble() ?? 0) + netPayout;
-      await client.from('wallets').update({'balance': newBalance, 'total_earned': newTotalEarned}).eq('id', wallet['id']);
-    }
-
-    await client.from('transactions').insert({
-      'user_id': userId,
-      'type': 'credit',
-      'amount': netPayout,
-      'description': 'Order payout (order #${order.id.substring(0, order.id.length.clamp(0, 8))}, commission ${(commissionAmount).toStringAsFixed(0)} deducted)',
-      'status': 'completed',
-    });
   }
 
   Future<void> cancelOrder(VendorOrder order) async {

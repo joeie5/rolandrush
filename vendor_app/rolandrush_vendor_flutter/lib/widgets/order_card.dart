@@ -8,11 +8,13 @@ import 'app_button.dart';
 
 (Color, Color) _statusTone(VendorOrderStatus s) {
   switch (s) {
-    case VendorOrderStatus.pending:
+    case VendorOrderStatus.placed:
       return (AppColors.coralSoft, AppColors.coral);
     case VendorOrderStatus.preparing:
       return (AppColors.warnSoft, AppColors.warn);
     case VendorOrderStatus.ready:
+    case VendorOrderStatus.pickedUp:
+    case VendorOrderStatus.delivering:
       return (AppColors.infoSoft, AppColors.info);
     case VendorOrderStatus.delivered:
       return (AppColors.goodSoft, AppColors.good);
@@ -30,7 +32,7 @@ class OrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tone = _statusTone(order.status);
-    final isNew = order.status == VendorOrderStatus.pending;
+    final isNew = order.status == VendorOrderStatus.placed;
     final itemCount = order.items.fold<int>(0, (s, l) => s + l.quantity);
 
     return Container(

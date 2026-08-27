@@ -20,20 +20,33 @@ class ActiveDeliveryState {
   }
 }
 
-/// Status string written alongside each current_step, matching the values
-/// the customer app's orders_screen.dart already understands
-/// (placed/preparing/picked_up/delivering/delivered/cancelled).
+/// Status string written alongside each current_step, matching the one
+/// canonical vocabulary all three apps write/read
+/// (placed/preparing/ready/picked_up/delivering/delivered/cancelled).
+/// No entry for step 1 (en route to vendor) — during that leg the order's
+/// status stays whatever the vendor last set it to (`ready`); only
+/// `orders.rider_id` being non-null signals a rider is assigned and
+/// coming. Writing anything here for step 1 was the actual bug: it
+/// overwrote the vendor's `ready` with a value ('ready' again, coincidentally
+/// harmless here, but conceptually wrong) before the rider had physically
+/// done anything yet. No entry for step 4 either — that transition (plus
+/// status/commission_amount/delivered_at and both wallet credits) is
+/// handled entirely by the complete_delivery_and_credit() RPC, not by a
+/// plain client update; see confirmDeliveryWithOtp below.
 const _statusForStep = {
-  1: 'ready', // en route to vendor — rider assigned, not yet physically there
-  2: 'ready', // at vendor, about to pick up
+  2: 'picked_up', // rider has physically picked up at the vendor
   3: 'delivering',
-  4: 'delivered',
 };
 
 /// Drives ActiveDelivery.tsx's 4-step flow (En Route → Pickup → Delivering
-/// → Delivered), backed by real `orders.current_step`. Step 4 requires the
-/// customer's delivery_otp instead of firing on tap alone — the schema
-/// already has `orders.delivery_otp` for exactly this anti-fraud check.
+/// → Delivered), backed by real `orders.current_step`. Steps 2-3 are plain
+/// client updates; the final step (delivery + vendor/rider payout) goes
+/// through the complete_delivery_and_credit() RPC instead — see
+/// confirmDeliveryWithOtp. That RPC is a SECURITY DEFINER function that
+/// re-checks the delivery_otp match itself (not just trusting this
+/// client already checked it) since it's the one place actually crediting
+/// money to another user's wallet; a client-side-only OTP check would be
+/// bypassable by anyone calling the RPC directly.
 class ActiveDeliveryNotifier extends StateNotifier<ActiveDeliveryState> {
   final String orderId;
   ActiveDeliveryNotifier(this.orderId) : super(const ActiveDeliveryState()) {
@@ -50,66 +63,52 @@ class ActiveDeliveryNotifier extends StateNotifier<ActiveDeliveryState> {
     }
   }
 
+  /// Advances steps 2 (picked up) and 3 (delivering) only — step 4 must
+  /// go through confirmDeliveryWithOtp instead, which is why this refuses
+  /// to advance past step 3.
   Future<void> advanceStep() async {
     final order = state.order;
-    if (order == null || order.currentStep == DeliveryStep.delivered) return;
+    if (order == null || order.currentStep.value >= 3) return;
 
     final nextStep = DeliveryStep.fromInt(order.currentStep.value + 1);
     state = state.copyWith(isUpdatingStep: true);
     try {
       await SupabaseService.client.from('orders').update({
         'current_step': nextStep.value,
-        'status': _statusForStep[nextStep.value],
-        if (nextStep == DeliveryStep.delivered) 'delivered_at': DateTime.now().toIso8601String(),
+        if (_statusForStep[nextStep.value] != null) 'status': _statusForStep[nextStep.value],
       }).eq('id', order.id);
-
-      if (nextStep == DeliveryStep.delivered) {
-        await _creditRiderWallet(order);
-      }
-
       await _load();
     } finally {
       state = state.copyWith(isUpdatingStep: false);
     }
   }
 
-  /// Credits the rider's wallet with the order's delivery_fee on
-  /// completion — same client-side wallet-credit pattern the vendor app
-  /// uses in vendor_orders_provider.dart's _creditVendorWallet (no DB
-  /// trigger does this automatically today, so the app has to). Rider
-  /// earns the delivery_fee, not the order total/subtotal — those go to
-  /// the vendor and platform respectively.
-  Future<void> _creditRiderWallet(DeliveryOrder order) async {
-    final userId = SupabaseService.currentUserId;
-    if (userId == null) return;
-    final amount = order.deliveryFee;
-    if (amount <= 0) return;
-
-    final client = SupabaseService.client;
-    final wallet = await client.from('wallets').select('id, balance, total_earned').eq('user_id', userId).maybeSingle();
-    if (wallet == null) {
-      await client.from('wallets').insert({'user_id': userId, 'balance': amount, 'total_earned': amount});
-    } else {
-      final newBalance = ((wallet['balance'] as num?)?.toDouble() ?? 0) + amount;
-      final newTotalEarned = ((wallet['total_earned'] as num?)?.toDouble() ?? 0) + amount;
-      await client.from('wallets').update({'balance': newBalance, 'total_earned': newTotalEarned}).eq('id', wallet['id']);
-    }
-    await client.from('transactions').insert({
-      'user_id': userId,
-      'order_id': order.id,
-      'amount': amount,
-      'type': 'delivery_earning',
-    });
-  }
-
-  /// Called on the final step instead of advanceStep() directly — verifies
-  /// the code the customer reads out before marking delivered.
+  /// Final step: verifies the code the customer reads out, then calls the
+  /// complete_delivery_and_credit() RPC to atomically mark the order
+  /// delivered and pay out both the vendor and this rider. No direct
+  /// transactions/wallets writes here anymore — RLS blocks a rider from
+  /// writing to the vendor's wallet directly, by design (see the FIX 2
+  /// migrations); this cross-user payout only happens inside that
+  /// SECURITY DEFINER function now.
   Future<bool> confirmDeliveryWithOtp(String enteredOtp) async {
     final order = state.order;
     if (order == null) return false;
-    if (order.deliveryOtp == null || order.deliveryOtp != enteredOtp) return false;
-    await advanceStep();
-    return true;
+    state = state.copyWith(isUpdatingStep: true);
+    try {
+      await SupabaseService.client.rpc('complete_delivery_and_credit', params: {
+        'p_order_id': order.id,
+        'p_otp': enteredOtp,
+      });
+      await _load();
+      return true;
+    } catch (_) {
+      // Covers both "wrong code" and "already delivered"/other RPC
+      // exceptions — the RPC's own exception text isn't surfaced to the
+      // UI today, just success/failure, matching the previous behavior.
+      return false;
+    } finally {
+      state = state.copyWith(isUpdatingStep: false);
+    }
   }
 }
 

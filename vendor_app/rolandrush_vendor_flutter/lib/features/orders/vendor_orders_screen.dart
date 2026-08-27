@@ -122,7 +122,7 @@ class _VendorOrdersScreenState extends ConsumerState<VendorOrdersScreen> {
                     ],
                   ),
           ),
-          Align(alignment: Alignment.bottomCenter, child: VendorBottomNav(currentPath: '/orders', newOrderCount: active.where((o) => o.status.value == 'pending').length)),
+          Align(alignment: Alignment.bottomCenter, child: VendorBottomNav(currentPath: '/orders', newOrderCount: active.where((o) => o.status.value == 'placed').length)),
         ],
       ),
     );

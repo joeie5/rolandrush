@@ -29,7 +29,15 @@ final riderRouter = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, __) => const SplashScreen()),
     GoRoute(path: '/auth/phone', builder: (_, __) => const PhoneEntryScreen()),
-    GoRoute(path: '/auth/otp', builder: (_, state) => OtpVerifyScreen(phone: state.extra as String? ?? '')),
+    GoRoute(
+      path: '/auth/otp',
+      // Phone travels as a query param, not `extra` — `extra` is an
+      // in-memory-only value that go_router drops on web whenever the URL
+      // itself changes without a matching in-app push (a refresh, a
+      // hot-reload, browser back/forward), silently emptying the phone and
+      // breaking the dev bypass's exact-match check.
+      builder: (_, state) => OtpVerifyScreen(phone: state.uri.queryParameters['phone'] ?? ''),
+    ),
     GoRoute(path: '/auth/signup', builder: (_, __) => const SignupScreen()),
     GoRoute(path: '/auth/verification', builder: (_, __) => const VerificationStatusScreen()),
     GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),

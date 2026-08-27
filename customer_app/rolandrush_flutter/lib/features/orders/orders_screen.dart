@@ -14,6 +14,7 @@ import 'providers/orders_provider.dart';
 const _statusLabels = {
   'placed': 'Placed',
   'preparing': 'Preparing',
+  'ready': 'Ready for pickup',
   'picked_up': 'Picked up',
   'delivering': 'On the way',
   'delivered': 'Delivered',

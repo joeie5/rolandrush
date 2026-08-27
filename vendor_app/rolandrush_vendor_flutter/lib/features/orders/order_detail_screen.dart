@@ -12,7 +12,7 @@ import '../dashboard/providers/vendor_session_provider.dart';
 import 'providers/vendor_order_detail_provider.dart';
 import 'providers/vendor_orders_provider.dart';
 
-const _timeline = [VendorOrderStatus.pending, VendorOrderStatus.preparing, VendorOrderStatus.ready, VendorOrderStatus.delivered];
+const _timeline = [VendorOrderStatus.placed, VendorOrderStatus.preparing, VendorOrderStatus.ready, VendorOrderStatus.delivered];
 
 class OrderDetailScreen extends ConsumerWidget {
   final String orderId;
@@ -191,7 +191,7 @@ class OrderDetailScreen extends ConsumerWidget {
                             },
                             child: Text(action),
                           ),
-                        if (order.status == VendorOrderStatus.pending || order.status == VendorOrderStatus.preparing) ...[
+                        if (order.status.vendorCancellable) ...[
                           const SizedBox(height: 8),
                           AppButton(
                             full: true,

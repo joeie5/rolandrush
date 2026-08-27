@@ -37,7 +37,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
     if (!mounted) return;
     setState(() => sending = false);
     if (ok) {
-      context.push('/auth/otp', extra: e164);
+      context.push(Uri(path: '/auth/otp', queryParameters: {'phone': e164}).toString());
     } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not send code. Try again.')));
     }

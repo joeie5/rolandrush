@@ -1,9 +1,11 @@
-/// Maps to `orders` in this project's schema — note this is a DIFFERENT
-/// shape than RolandRushApp's `orders` table (no rider_id/current_step/
-/// delivery_otp here; this schema uses agent_id and a simpler
-/// pending→preparing→ready→delivered status instead of the customer app's
-/// 4-step rider flow). Another sign the two backends have drifted.
-enum VendorOrderStatus { pending, preparing, ready, delivered, cancelled }
+/// Maps to `orders` in the shared RolandRushApp schema. `status` follows one
+/// canonical vocabulary written by all three apps:
+///   placed (customer, at checkout) -> preparing (vendor) -> ready (vendor)
+///   -> picked_up (rider) -> delivering (rider) -> delivered (rider)
+///   -> cancelled (vendor, or customer — only from placed/preparing/ready)
+/// The vendor app only ever WRITES preparing/ready/cancelled. picked_up/
+/// delivering/delivered are rider-owned and shown here read-only.
+enum VendorOrderStatus { placed, preparing, ready, pickedUp, delivering, delivered, cancelled }
 
 VendorOrderStatus _statusFromString(String? s) {
   switch (s) {
@@ -11,26 +13,42 @@ VendorOrderStatus _statusFromString(String? s) {
       return VendorOrderStatus.preparing;
     case 'ready':
       return VendorOrderStatus.ready;
+    case 'picked_up':
+      return VendorOrderStatus.pickedUp;
+    case 'delivering':
+      return VendorOrderStatus.delivering;
     case 'delivered':
       return VendorOrderStatus.delivered;
     case 'cancelled':
       return VendorOrderStatus.cancelled;
     default:
-      return VendorOrderStatus.pending;
+      return VendorOrderStatus.placed;
   }
 }
 
 extension VendorOrderStatusX on VendorOrderStatus {
-  String get value => name;
+  /// The exact string written to/read from `orders.status`.
+  String get value {
+    switch (this) {
+      case VendorOrderStatus.pickedUp:
+        return 'picked_up';
+      default:
+        return name;
+    }
+  }
 
   String get label {
     switch (this) {
-      case VendorOrderStatus.pending:
+      case VendorOrderStatus.placed:
         return 'New';
       case VendorOrderStatus.preparing:
         return 'Preparing';
       case VendorOrderStatus.ready:
         return 'Ready for Pickup';
+      case VendorOrderStatus.pickedUp:
+        return 'Picked up by rider';
+      case VendorOrderStatus.delivering:
+        return 'Out for delivery';
       case VendorOrderStatus.delivered:
         return 'Delivered';
       case VendorOrderStatus.cancelled:
@@ -38,33 +56,36 @@ extension VendorOrderStatusX on VendorOrderStatus {
     }
   }
 
-  /// Label for the one-tap "advance" button, or null if this is a terminal state.
+  /// Label for the one-tap "advance" button, or null once the rider owns
+  /// the order (picked_up onward) or it's in a terminal state.
   String? get advanceLabel {
     switch (this) {
-      case VendorOrderStatus.pending:
+      case VendorOrderStatus.placed:
         return 'Accept order';
       case VendorOrderStatus.preparing:
         return 'Mark ready';
-      case VendorOrderStatus.ready:
-        return 'Handed to rider';
       default:
         return null;
     }
   }
 
-  /// What the vendor can move an order to from here.
+  /// What the vendor can move an order to from here. Vendor never sets
+  /// picked_up/delivering/delivered — that's the rider app's job once a
+  /// rider physically takes the order (see active_delivery_provider.dart).
   VendorOrderStatus? get next {
     switch (this) {
-      case VendorOrderStatus.pending:
+      case VendorOrderStatus.placed:
         return VendorOrderStatus.preparing;
       case VendorOrderStatus.preparing:
         return VendorOrderStatus.ready;
-      case VendorOrderStatus.ready:
-        return VendorOrderStatus.delivered; // typically rider/agent pickup triggers this instead
       default:
         return null;
     }
   }
+
+  /// Vendor can only cancel before a rider has physically picked up.
+  bool get vendorCancellable =>
+      this == VendorOrderStatus.placed || this == VendorOrderStatus.preparing || this == VendorOrderStatus.ready;
 }
 
 class OrderLineItem {

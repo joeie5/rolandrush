@@ -11,7 +11,14 @@ import '../../widgets/app_button.dart';
 import '../../widgets/error_view.dart';
 import 'providers/orders_provider.dart';
 
-const _steps = ['En route to vendor', 'Picked up', 'Delivering', 'Delivered'];
+// Driven entirely by `orders.status` (the cross-app lifecycle field), not
+// `current_step` — current_step is a rider-only fine-grained field that
+// only starts meaning anything once status reaches picked_up, and sits
+// frozen at 1 for the entire placed/preparing/ready phase before any rider
+// is even assigned. Using it as the primary tracker made the UI show "en
+// route" the whole time an order was still just sitting with the vendor.
+const _steps = ['Placed', 'Preparing', 'Ready for pickup', 'Picked up', 'On the way', 'Delivered'];
+const _statusOrder = ['placed', 'preparing', 'ready', 'picked_up', 'delivering', 'delivered'];
 
 class OrderTrackingScreen extends ConsumerStatefulWidget {
   final String orderId;
@@ -56,7 +63,10 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
         data: (fetched) {
           final order = liveOrder ?? fetched;
           if (order == null) return const Center(child: Text('Order not found'));
-          final step = order.currentStep.clamp(1, 4);
+          // cancelled has no place on this forward-only progress track —
+          // show it as a distinct terminal state, not a stalled position.
+          final statusIndex = _statusOrder.indexOf(order.status);
+          final step = statusIndex == -1 ? 0 : statusIndex + 1;
 
           return ListView(
             padding: const EdgeInsets.all(20),
@@ -70,8 +80,17 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                     const SizedBox(height: 4),
                     Text(order.restaurantName ?? '', style: AppTheme.sans(size: 13, color: AppColors.ink35)),
                     const SizedBox(height: 20),
-                    for (var i = 0; i < _steps.length; i++)
-                      _StepRow(label: _steps[i], done: i < step, active: i == step - 1, isLast: i == _steps.length - 1),
+                    if (order.status == 'cancelled')
+                      Row(
+                        children: [
+                          const Icon(Icons.cancel_outlined, size: 20, color: AppColors.coral),
+                          const SizedBox(width: 8),
+                          Text('Order cancelled', style: AppTheme.sans(size: 15, weight: FontWeight.w700, color: AppColors.coral)),
+                        ],
+                      )
+                    else
+                      for (var i = 0; i < _steps.length; i++)
+                        _StepRow(label: _steps[i], done: i < step, active: i == step - 1, isLast: i == _steps.length - 1),
                   ],
                 ),
               ),

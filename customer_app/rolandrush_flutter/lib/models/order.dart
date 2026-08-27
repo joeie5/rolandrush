@@ -1,5 +1,10 @@
-/// Maps to `public.orders`. current_step: 1 en route to vendor, 2 pickup,
-/// 3 delivering, 4 delivered — set by the rider app.
+/// Maps to `public.orders`. `status` is the cross-app source of truth for
+/// the order lifecycle (placed -> preparing -> ready -> picked_up ->
+/// delivering -> delivered, or cancelled) — display the main tracking
+/// state from this field. `current_step` (rider app's 1-4) is a rider-only
+/// fine-grained field, only meaningful once status reaches picked_up or
+/// later; before that a rider may not even be assigned yet, so don't treat
+/// current_step as the single source of truth for the whole order.
 class RushOrder {
   final String id;
   final String orderNumber;

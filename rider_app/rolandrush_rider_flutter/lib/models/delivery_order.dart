@@ -46,7 +46,9 @@ class DeliveryOrder {
   final List<OrderItemLine> items;
   final double totalAmount;
   final double deliveryFee;
-  final String status; // pending/accepted/preparing/en_route/delivered/cancelled
+  final double? subtotal;
+  final double? commissionRateApplied;
+  final String status; // placed/preparing/ready/picked_up/delivering/delivered/cancelled
   final DeliveryStep currentStep;
   final String? deliveryOtp;
   final DateTime createdAt;
@@ -66,11 +68,17 @@ class DeliveryOrder {
     this.items = const [],
     required this.totalAmount,
     required this.deliveryFee,
+    this.subtotal,
+    this.commissionRateApplied,
     required this.status,
     required this.currentStep,
     this.deliveryOtp,
     required this.createdAt,
   });
+
+  /// Falls back to computing subtotal from line items if the column
+  /// wasn't set — mirrors VendorOrder.effectiveSubtotal in the vendor app.
+  double get effectiveSubtotal => subtotal ?? items.fold<double>(0, (s, l) => s + l.price * l.quantity);
 
   factory DeliveryOrder.fromSupabase(Map<String, dynamic> row) {
     return DeliveryOrder(
@@ -91,7 +99,9 @@ class DeliveryOrder {
           const [],
       totalAmount: (row['total_amount'] as num).toDouble(),
       deliveryFee: (row['delivery_fee'] as num).toDouble(),
-      status: row['status'] as String? ?? 'pending',
+      subtotal: (row['subtotal'] as num?)?.toDouble(),
+      commissionRateApplied: (row['commission_rate_applied'] as num?)?.toDouble(),
+      status: row['status'] as String? ?? 'placed',
       currentStep: DeliveryStep.fromInt(row['current_step'] as int? ?? 1),
       deliveryOtp: row['delivery_otp'] as String?,
       createdAt: DateTime.parse(row['created_at'] as String),
