@@ -44,5 +44,9 @@ class CartItem {
 
   double get unitPrice => basePrice + addOnsTotal;
 
-  double get lineTotal => unitPrice * quantity;
+  // addOnsTotal is already the total for this cart line's add-ons (each
+  // AddOn.lineTotal is price × that add-on's own selected quantity) — it
+  // must not be multiplied by the item's quantity again, or e.g. 1 egg
+  // sauce on a 4x item overcharges as if 4 egg sauces were added.
+  double get lineTotal => basePrice * quantity + addOnsTotal;
 }

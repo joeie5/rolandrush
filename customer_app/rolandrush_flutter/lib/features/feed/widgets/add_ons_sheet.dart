@@ -48,7 +48,11 @@ class _AddOnsSheetState extends State<AddOnsSheet> {
     return sum;
   }
 
-  double get _totalPrice => (widget.item.price + _addOnsTotal) * _quantity;
+  // Add-ons are already priced per the quantity chosen for that add-on
+  // specifically (_addOnsTotal), not per unit of the base item — they
+  // must not be multiplied by _quantity again here, or picking e.g. 1
+  // egg sauce on a 4x item overcharges as if 4 egg sauces were added.
+  double get _totalPrice => widget.item.price * _quantity + _addOnsTotal;
 
   void _changeAddOn(String addOnId, int delta) {
     setState(() {
