@@ -13,6 +13,7 @@ import '../feed/widgets/add_ons_sheet.dart';
 import 'providers/restaurants_provider.dart';
 import 'providers/vendor_menu_provider.dart';
 import '../profile/providers/favourites_provider.dart';
+import '../checkout/providers/checkout_provider.dart';
 
 class RestaurantDetailScreen extends ConsumerStatefulWidget {
   final String vendorId;
@@ -140,7 +141,15 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
                                     const SizedBox(width: 16),
                                     const Icon(Icons.pedal_bike_rounded, size: 14, color: AppColors.ink50),
                                     const SizedBox(width: 4),
-                                    Text(naira(restaurant.deliveryFee), style: AppTheme.sans(size: 12, color: AppColors.ink50)),
+                                    Text(
+                                      naira(
+                                        ref.watch(deliveryFeeByCityProvider).maybeWhen(
+                                              data: (m) => m[restaurant.city] ?? restaurant.deliveryFee,
+                                              orElse: () => restaurant.deliveryFee,
+                                            ),
+                                      ),
+                                      style: AppTheme.sans(size: 12, color: AppColors.ink50),
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 12),

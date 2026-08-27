@@ -6,6 +6,30 @@ import '../../cart/providers/cart_provider.dart';
 import '../../restaurants/providers/restaurants_provider.dart';
 import '../../profile/providers/customer_profile_provider.dart';
 
+/// Real delivery_fee_rules, keyed by the vendor's city (matched via
+/// service_areas.city — same join used by the admin dashboard's own
+/// zone→vendor counts). Shared between the checkout preview
+/// (checkout_screen.dart) and the actual order write below so they never
+/// show/charge different numbers. Falls back to
+/// vendor_profiles.delivery_fee per-vendor wherever a city has no active
+/// rule yet — see usages.
+final deliveryFeeByCityProvider = FutureProvider<Map<String, double>>((ref) async {
+  final feeByCity = <String, double>{};
+  try {
+    final areaRows = await SupabaseService.client.from('service_areas').select('id, city');
+    final areaCityById = {for (final a in (areaRows as List)) a['id'] as String: a['city'] as String?};
+    final ruleRows =
+        await SupabaseService.client.from('delivery_fee_rules').select('service_area_id, base_fee').eq('is_active', true);
+    for (final r in (ruleRows as List)) {
+      final city = areaCityById[r['service_area_id']];
+      if (city != null) feeByCity[city] = (r['base_fee'] as num).toDouble();
+    }
+  } catch (_) {
+    // Empty map — every vendor falls back to vendor_profiles.delivery_fee.
+  }
+  return feeByCity;
+});
+
 class CheckoutLineTotals {
   final double subtotal;
   final double deliveryFee;
@@ -54,6 +78,8 @@ class CheckoutNotifier extends StateNotifier<AsyncValue<void>> {
     final serviceFeeRate = platformSettingDouble(settings, 'service_fee_rate', 0.10);
     final createdIds = <String>[];
 
+    final feeByCity = await ref.read(deliveryFeeByCityProvider.future);
+
     try {
       for (final entry in grouped.entries) {
         final vendorId = entry.key;
@@ -62,10 +88,9 @@ class CheckoutNotifier extends StateNotifier<AsyncValue<void>> {
         final restaurantName = restaurant.isNotEmpty ? restaurant.first.name : lines.first.vendorName;
         final commissionRate = restaurant.isNotEmpty ? restaurant.first.commissionRate : 0.15;
 
-        // No delivery_fee_rules rows exist yet (per the migration notes),
-        // so this always falls back to vendor_profiles.delivery_fee today.
-        // Once rules are seeded, look them up by service area here instead.
-        final deliveryFee = restaurant.isNotEmpty ? restaurant.first.deliveryFee : 0.0;
+        final vendorCity = restaurant.isNotEmpty ? restaurant.first.city : null;
+        final ruleFee = vendorCity != null ? feeByCity[vendorCity] : null;
+        final deliveryFee = ruleFee ?? (restaurant.isNotEmpty ? restaurant.first.deliveryFee : 0.0);
 
         final subtotal = lines.fold<double>(0, (s, l) => s + l.lineTotal);
         final serviceFee = (subtotal * serviceFeeRate).roundToDouble();

@@ -35,6 +35,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final addressesAsync = ref.watch(addressesProvider);
     final settingsAsync = ref.watch(platformSettingsProvider);
     final profileAsync = ref.watch(customerProfileProvider);
+    final feeByCity = ref.watch(deliveryFeeByCityProvider).maybeWhen(data: (m) => m, orElse: () => <String, double>{});
     final blocked = profileAsync.maybeWhen(data: (p) => p != null && !p.canOrder, orElse: () => false);
 
     if (items.isEmpty) {
@@ -55,7 +56,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         double delivery = 0;
         for (final vendorId in grouped.keys) {
           final r = restaurants.where((r) => r.id == vendorId);
-          if (r.isNotEmpty) delivery += r.first.deliveryFee;
+          if (r.isEmpty) continue;
+          final ruleFee = feeByCity[r.first.city];
+          delivery += ruleFee ?? r.first.deliveryFee;
         }
         final serviceFeeRate = settingsAsync.maybeWhen(
           data: (s) => platformSettingDouble(s, 'service_fee_rate', 0.10),

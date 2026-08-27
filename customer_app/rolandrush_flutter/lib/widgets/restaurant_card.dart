@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../core/theme.dart';
 import '../models/restaurant.dart';
 import '../features/profile/providers/favourites_provider.dart';
+import '../features/checkout/providers/checkout_provider.dart';
 import 'primitives.dart';
 
 const _accentPalette = [
@@ -26,6 +27,8 @@ class RestaurantRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final favourites = ref.watch(favouritesProvider);
     final fav = favourites.contains(restaurant.id);
+    final feeByCity = ref.watch(deliveryFeeByCityProvider).maybeWhen(data: (m) => m, orElse: () => <String, double>{});
+    final displayedDeliveryFee = feeByCity[restaurant.city] ?? restaurant.deliveryFee;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -71,7 +74,7 @@ class RestaurantRow extends ConsumerWidget {
                               const SizedBox(width: 10),
                               const Icon(Icons.pedal_bike_rounded, size: 12, color: AppColors.ink50),
                               const SizedBox(width: 3),
-                              Text('₦${restaurant.deliveryFee.toStringAsFixed(0)}',
+                              Text('₦${displayedDeliveryFee.toStringAsFixed(0)}',
                                   style: AppTheme.sans(size: 12, color: AppColors.ink50)),
                             ],
                           ),

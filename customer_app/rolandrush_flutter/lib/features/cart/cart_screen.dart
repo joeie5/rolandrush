@@ -8,6 +8,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_screen.dart';
 import '../../widgets/error_view.dart';
 import '../restaurants/providers/restaurants_provider.dart';
+import '../checkout/providers/checkout_provider.dart';
 import 'providers/cart_provider.dart';
 
 class CartScreen extends ConsumerWidget {
@@ -18,6 +19,7 @@ class CartScreen extends ConsumerWidget {
     final items = ref.watch(cartProvider);
     final grouped = ref.read(cartProvider.notifier).groupedByVendor;
     final restaurantsAsync = ref.watch(restaurantsProvider);
+    final feeByCity = ref.watch(deliveryFeeByCityProvider).maybeWhen(data: (m) => m, orElse: () => <String, double>{});
     final itemCount = items.fold<int>(0, (s, c) => s + c.quantity);
     final subtotal = items.fold<double>(0, (s, c) => s + c.lineTotal);
 
@@ -57,10 +59,15 @@ class CartScreen extends ConsumerWidget {
 
     return restaurantsAsync.when(
       data: (restaurants) {
+        double feeForVendor(String vendorId) {
+          final r = restaurants.where((r) => r.id == vendorId);
+          if (r.isEmpty) return 0;
+          return feeByCity[r.first.city] ?? r.first.deliveryFee;
+        }
+
         double delivery = 0;
         for (final vendorId in grouped.keys) {
-          final r = restaurants.where((r) => r.id == vendorId);
-          if (r.isNotEmpty) delivery += r.first.deliveryFee;
+          delivery += feeForVendor(vendorId);
         }
 
         return Scaffold(
@@ -100,9 +107,7 @@ class CartScreen extends ConsumerWidget {
                     vendorId: entry.key,
                     lines: entry.value,
                     vendorName: entry.value.first.vendorName,
-                    deliveryFee: restaurants.where((r) => r.id == entry.key).isNotEmpty
-                        ? restaurants.firstWhere((r) => r.id == entry.key).deliveryFee
-                        : 0,
+                    deliveryFee: feeForVendor(entry.key),
                   ),
                 const SizedBox(height: 4),
                 GestureDetector(
