@@ -99,23 +99,47 @@ class OrderDetailScreen extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('PROGRESS', style: AppTheme.sans(size: 11, weight: FontWeight.w800, color: AppColors.inkSubtle).copyWith(letterSpacing: 0.6)),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
+                              // Dots + connectors on their own row (fixed
+                              // height, unaffected by label wrapping) and
+                              // labels on a separate row below — the old
+                              // single-row layout put an unbounded-width
+                              // Text next to a variable-height connector
+                              // line, which overflowed once _timeline grew
+                              // from 4 stages to 6 with longer labels like
+                              // "Picked up by Rider" on narrow screens.
                               Row(
                                 children: List.generate(_timeline.length, (i) {
                                   final done = i <= currentStep;
+                                  return [
+                                    Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(color: done ? AppColors.coral : AppColors.lineStrong, shape: BoxShape.circle),
+                                    ),
+                                    if (i < _timeline.length - 1)
+                                      Expanded(
+                                        child: Container(height: 2, color: i < currentStep ? AppColors.coral : AppColors.lineStrong),
+                                      ),
+                                  ];
+                                }).expand((w) => w).toList(),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: List.generate(_timeline.length, (i) {
+                                  final done = i <= currentStep;
                                   return Expanded(
-                                    child: Row(
-                                      children: [
-                                        Column(
-                                          children: [
-                                            Container(width: 10, height: 10, decoration: BoxDecoration(color: done ? AppColors.coral : AppColors.lineStrong, shape: BoxShape.circle)),
-                                            const SizedBox(height: 6),
-                                            Text(_timeline[i].label, style: AppTheme.sans(size: 10, weight: FontWeight.w600, color: done ? AppColors.ink : AppColors.inkSubtle)),
-                                          ],
-                                        ),
-                                        if (i < _timeline.length - 1)
-                                          Expanded(child: Container(height: 2, margin: const EdgeInsets.only(bottom: 18), color: i < currentStep ? AppColors.coral : AppColors.lineStrong)),
-                                      ],
+                                    child: Text(
+                                      _timeline[i].label,
+                                      textAlign: i == 0
+                                          ? TextAlign.left
+                                          : i == _timeline.length - 1
+                                              ? TextAlign.right
+                                              : TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTheme.sans(size: 9.5, weight: FontWeight.w600, color: done ? AppColors.ink : AppColors.inkSubtle),
                                     ),
                                   );
                                 }),

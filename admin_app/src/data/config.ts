@@ -1,5 +1,11 @@
-import type { AdminUser, FeeRule, ServiceZone } from '../types';
+import type { ServiceZone } from '../types';
 
+// serviceZones below is still real mock data — it's the source for the
+// phase2 Analytics page only (explicitly out of scope, left on mock data
+// per the original admin-wiring brief). feeRules and adminTeam mock
+// arrays that used to live in this file are gone — the live equivalents
+// (same names) now come from AdminContext, backed by real
+// delivery_fee_rules / admin_users tables.
 export const serviceZones: ServiceZone[] = [
 {
   id: 'z_osogbo',
@@ -89,130 +95,6 @@ export const serviceZones: ServiceZone[] = [
   baseFee: 750,
   radiusKm: 5
 }];
-
-
-export const feeRules: FeeRule[] = [
-{
-  id: 'f_osogbo',
-  serviceAreaId: 'mock',
-  name: 'Osogbo standard',
-  zone: 'Osogbo Central',
-  baseFee: 900,
-  perKm: 120,
-  minFee: 700,
-  maxFee: 2500,
-  surgeMultiplier: 1,
-  active: true
-},
-{
-  id: 'f_osogbo_peak',
-  serviceAreaId: 'mock',
-  name: 'Osogbo evening peak (6–9pm)',
-  zone: 'Osogbo Central',
-  baseFee: 900,
-  perKm: 120,
-  minFee: 900,
-  maxFee: 3200,
-  surgeMultiplier: 1.3,
-  active: true
-},
-{
-  id: 'f_ife',
-  serviceAreaId: 'mock',
-  name: 'Ile-Ife standard',
-  zone: 'Ile-Ife',
-  baseFee: 1100,
-  perKm: 140,
-  minFee: 900,
-  maxFee: 3000,
-  surgeMultiplier: 1,
-  active: true
-},
-{
-  id: 'f_ilesa',
-  serviceAreaId: 'mock',
-  name: 'Ilesa standard',
-  zone: 'Ilesa',
-  baseFee: 800,
-  perKm: 110,
-  minFee: 700,
-  maxFee: 2400,
-  surgeMultiplier: 1,
-  active: true
-},
-{
-  id: 'f_ede',
-  serviceAreaId: 'mock',
-  name: 'Ede standard',
-  zone: 'Ede',
-  baseFee: 700,
-  perKm: 110,
-  minFee: 600,
-  maxFee: 2200,
-  surgeMultiplier: 1,
-  active: true
-},
-{
-  id: 'f_rain',
-  serviceAreaId: 'mock',
-  name: 'Rain surcharge (all live zones)',
-  zone: 'All live zones',
-  baseFee: 0,
-  perKm: 0,
-  minFee: 0,
-  maxFee: 500,
-  surgeMultiplier: 1.15,
-  active: false
-}];
-
-
-export const adminTeam: AdminUser[] = [
-{
-  id: 'u_josh',
-  name: 'Josh Adeyemi',
-  email: 'josh@rolandrush.ng',
-  role: 'Founder',
-  status: 'active',
-  lastActiveAt: '2026-08-25T10:38:00',
-  actions30d: 412
-},
-{
-  id: 'u_ngozi',
-  name: 'Ngozi Eze',
-  email: 'ngozi@rolandrush.ng',
-  role: 'Ops Lead',
-  status: 'active',
-  lastActiveAt: '2026-08-25T09:12:00',
-  actions30d: 188
-},
-{
-  id: 'u_kunle',
-  name: 'Kunle Bello',
-  email: 'kunle@rolandrush.ng',
-  role: 'Support Agent',
-  status: 'active',
-  lastActiveAt: '2026-08-24T21:02:00',
-  actions30d: 96
-},
-{
-  id: 'u_amaka',
-  name: 'Amaka Duru',
-  email: 'amaka@rolandrush.ng',
-  role: 'Finance',
-  status: 'invited',
-  lastActiveAt: '2026-08-22T17:12:00',
-  actions30d: 0
-},
-{
-  id: 'u_deji',
-  name: 'Deji Rotimi',
-  email: 'deji@rolandrush.ng',
-  role: 'Support Agent',
-  status: 'disabled',
-  lastActiveAt: '2026-06-30T14:00:00',
-  actions30d: 0
-}];
-
 
 export const ROLE_PERMISSIONS: {
   role: string;
