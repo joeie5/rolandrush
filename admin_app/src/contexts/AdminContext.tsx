@@ -395,19 +395,38 @@ export function AdminProvider({ children }: {children: React.ReactNode;}) {
       const target = withdrawalList.find((item) => item.id === id);
       if (!target) return;
       const status = intent === 'approve' ? 'approved' : 'rejected';
-      const { error } = await supabase.
-      from('withdrawal_requests').
-      update({
-        status,
-        reviewed_by: currentAdminRow?.id ?? null,
-        reviewed_at: nowIso(),
-        rejection_reason: intent === 'reject' ? reason || null : null
-      }).
-      eq('id', id);
-      if (error) {
-        toast.error('Could not update withdrawal', { description: error.message });
-        return;
+
+      if (intent === 'approve') {
+        // Approving must actually move money — a plain status update
+        // here was the bug: it flipped withdrawal_requests.status but
+        // never touched wallets.balance, so a vendor's available balance
+        // never changed no matter how many withdrawals got "approved".
+        // This RPC debits the wallet, records the transaction, and sets
+        // status, all atomically, admin-gated.
+        const { error } = await supabase.rpc('approve_withdrawal_and_debit', {
+          p_withdrawal_id: id,
+          p_admin_id: currentAdminRow?.id ?? null
+        });
+        if (error) {
+          toast.error('Could not approve withdrawal', { description: error.message });
+          return;
+        }
+      } else {
+        const { error } = await supabase.
+        from('withdrawal_requests').
+        update({
+          status,
+          reviewed_by: currentAdminRow?.id ?? null,
+          reviewed_at: nowIso(),
+          rejection_reason: reason || null
+        }).
+        eq('id', id);
+        if (error) {
+          toast.error('Could not update withdrawal', { description: error.message });
+          return;
+        }
       }
+
       setWithdrawalList((current) =>
       current.map((item) => item.id === id ? { ...item, status, decision: { by: currentAdmin.name, at: nowIso(), reason } } : item)
       );
