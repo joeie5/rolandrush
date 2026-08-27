@@ -403,10 +403,7 @@ export function AdminProvider({ children }: {children: React.ReactNode;}) {
         // never changed no matter how many withdrawals got "approved".
         // This RPC debits the wallet, records the transaction, and sets
         // status, all atomically, admin-gated.
-        const { error } = await supabase.rpc('approve_withdrawal_and_debit', {
-          p_withdrawal_id: id,
-          p_admin_id: currentAdminRow?.id ?? null
-        });
+        const { error } = await supabase.rpc('approve_withdrawal_and_debit', { p_withdrawal_id: id });
         if (error) {
           toast.error('Could not approve withdrawal', { description: error.message });
           return;

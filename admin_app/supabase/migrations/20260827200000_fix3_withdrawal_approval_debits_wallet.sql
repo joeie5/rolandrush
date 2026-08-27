@@ -24,7 +24,7 @@ alter table public.wallets add column if not exists total_withdrawn numeric not 
 -- as complete_delivery_and_credit().
 -- ============================================================
 
-create or replace function public.approve_withdrawal_and_debit(p_withdrawal_id uuid, p_admin_id uuid)
+create or replace function public.approve_withdrawal_and_debit(p_withdrawal_id uuid)
 returns void
 language plpgsql
 security definer
@@ -32,8 +32,16 @@ set search_path = public
 as $$
 declare
   v_request record;
+  v_admin_id uuid;
+  v_balance numeric;
 begin
-  if not public.is_active_admin() then
+  -- Derived internally from the calling session, never trusted from the
+  -- caller — reviewed_by is the audit trail; a client-supplied admin id
+  -- would let anyone with an active admin session attribute an approval
+  -- to a different admin than who actually clicked it (or let a direct
+  -- RPC call bypassing the UI forge the attribution entirely).
+  select id into v_admin_id from public.admin_users where user_id = auth.uid();
+  if v_admin_id is null then
     raise exception 'Only an active admin can approve a withdrawal.';
   end if;
 
@@ -48,8 +56,15 @@ begin
   end if;
 
   -- Lock the wallet row for the duration of this transaction so a
-  -- double-click / concurrent approval can't double-debit.
-  perform 1 from public.wallets where user_id = v_request.user_id for update;
+  -- double-click / concurrent approval can't double-debit, and re-check
+  -- the balance here rather than trusting whatever was true when the
+  -- request was first created — balance can move between request and
+  -- approval (e.g. another withdrawal clears first), and this must not
+  -- drive a wallet negative.
+  select balance into v_balance from public.wallets where user_id = v_request.user_id for update;
+  if v_balance is null or v_balance < v_request.amount then
+    raise exception 'Wallet balance (%) is insufficient to cover this withdrawal (%).', coalesce(v_balance, 0), v_request.amount;
+  end if;
 
   update public.wallets
   set balance = balance - v_request.amount,
@@ -58,7 +73,7 @@ begin
 
   update public.withdrawal_requests
   set status = 'approved',
-      reviewed_by = p_admin_id,
+      reviewed_by = v_admin_id,
       reviewed_at = now()
   where id = p_withdrawal_id;
 
@@ -71,5 +86,5 @@ begin
 end;
 $$;
 
-revoke all on function public.approve_withdrawal_and_debit(uuid, uuid) from public;
-grant execute on function public.approve_withdrawal_and_debit(uuid, uuid) to authenticated;
+revoke all on function public.approve_withdrawal_and_debit(uuid) from public;
+grant execute on function public.approve_withdrawal_and_debit(uuid) to authenticated;
