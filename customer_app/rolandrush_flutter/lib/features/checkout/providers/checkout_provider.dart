@@ -38,6 +38,16 @@ class CheckoutNotifier extends StateNotifier<AsyncValue<void>> {
       return [];
     }
 
+    // orders.customer_id foreign-keys to customer_profiles.id, not
+    // auth.uid() — using the raw user id here failed with a foreign key
+    // violation on every single checkout attempt until this was caught by
+    // actually tracing an order through the schema end to end.
+    final customerProfileId = await ensureCustomerProfileId();
+    if (customerProfileId == null) {
+      state = AsyncValue.error('Not signed in', StackTrace.current);
+      return [];
+    }
+
     final grouped = ref.read(cartProvider.notifier).groupedByVendor;
     final restaurants = await ref.read(restaurantsProvider.future);
     final settings = await ref.read(platformSettingsProvider.future);
@@ -64,7 +74,7 @@ class CheckoutNotifier extends StateNotifier<AsyncValue<void>> {
         final row = await SupabaseService.client
             .from('orders')
             .insert({
-              'customer_id': userId,
+              'customer_id': customerProfileId,
               'vendor_id': vendorId,
               'restaurant_name': restaurantName,
               'items': lines.map((l) => _lineToJson(l)).toList(),
