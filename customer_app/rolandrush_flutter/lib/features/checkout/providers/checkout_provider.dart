@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/supabase_service.dart';
 import '../../../core/providers/platform_settings_provider.dart';
@@ -5,6 +6,19 @@ import '../../../models/cart_item.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../restaurants/providers/restaurants_provider.dart';
 import '../../profile/providers/customer_profile_provider.dart';
+import '../../auth/providers/auth_provider.dart' show testBypassPhone;
+
+/// Every order needs a delivery_otp for the rider app's anti-fraud
+/// delivery-confirmation step (see complete_delivery_and_credit) — this
+/// was never being set at all, meaning every order shipped with a null
+/// code and could never actually be marked delivered through the normal
+/// flow. Real orders get a random 4-digit code; the shared dev-bypass
+/// test account gets a fixed, known code so it doesn't have to be reset
+/// by hand via the database after every test order.
+String _generateDeliveryOtp(String? customerPhone) {
+  if (customerPhone == testBypassPhone) return '1234';
+  return (1000 + Random().nextInt(9000)).toString();
+}
 
 /// Real delivery_fee_rules, keyed by the vendor's city (matched via
 /// service_areas.city — same join used by the admin dashboard's own
@@ -79,6 +93,7 @@ class CheckoutNotifier extends StateNotifier<AsyncValue<void>> {
     final createdIds = <String>[];
 
     final feeByCity = await ref.read(deliveryFeeByCityProvider.future);
+    final deliveryOtp = _generateDeliveryOtp(profile?.phone);
 
     try {
       for (final entry in grouped.entries) {
@@ -116,6 +131,7 @@ class CheckoutNotifier extends StateNotifier<AsyncValue<void>> {
               'commission_rate_applied': commissionRate,
               'status': 'placed',
               'current_step': 1,
+              'delivery_otp': deliveryOtp,
               'delivery_address': deliveryAddress,
               'payment_method': paymentMethod,
               'payment_status': 'pending',

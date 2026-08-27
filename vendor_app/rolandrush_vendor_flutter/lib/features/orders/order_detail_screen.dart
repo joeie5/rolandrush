@@ -12,7 +12,20 @@ import '../dashboard/providers/vendor_session_provider.dart';
 import 'providers/vendor_order_detail_provider.dart';
 import 'providers/vendor_orders_provider.dart';
 
-const _timeline = [VendorOrderStatus.placed, VendorOrderStatus.preparing, VendorOrderStatus.ready, VendorOrderStatus.delivered];
+// Full canonical vocabulary, not just the vendor-writable subset — once
+// picked_up/delivering happen (rider-owned), order.status.indexOf() must
+// still find them here. With the old 4-stage list (placed/preparing/
+// ready/delivered), indexOf() returned -1 for those two statuses, which
+// reset the entire progress bar to "nothing done" the moment a rider
+// picked up the order — worse than just a missing visual step.
+const _timeline = [
+  VendorOrderStatus.placed,
+  VendorOrderStatus.preparing,
+  VendorOrderStatus.ready,
+  VendorOrderStatus.pickedUp,
+  VendorOrderStatus.delivering,
+  VendorOrderStatus.delivered,
+];
 
 class OrderDetailScreen extends ConsumerWidget {
   final String orderId;
