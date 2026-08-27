@@ -38,9 +38,60 @@ export function Dashboard() {
     riderChecks,
     moderation,
     orders,
+    riders,
     audit,
     currentAdmin
   } = useAdmin();
+
+  // Real "today" stats — the previous version of this panel was 6
+  // hardcoded literal numbers, never wired to any query at all. Computed
+  // from AdminContext's already-loaded `orders` (capped at the 500 most
+  // recent, same limitation every other page using this state has) —
+  // fine at current volume, would need a dedicated "today" query if a
+  // single day ever exceeds 500 orders.
+  const todayStats = React.useMemo(() => {
+    const isToday = (iso: string | null) => {
+      if (!iso) return false;
+      const d = new Date(iso);
+      const now = new Date();
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+    };
+
+    const todaysOrders = orders.filter((o) => isToday(o.placedAt));
+    const gmv = todaysOrders.reduce((s, o) => s + o.totals.total, 0);
+
+    const releasedToday = withdrawals.filter((w) => w.status === 'approved' && w.decision?.at && isToday(w.decision.at));
+    const payoutsReleased = releasedToday.reduce((s, w) => s + w.amount, 0);
+
+    const refundedToday = todaysOrders.filter((o) => o.refundAmount > 0);
+    const refundsIssued = refundedToday.reduce((s, o) => s + o.refundAmount, 0);
+
+    const ridersOnline = riders.filter((r) => r.online).length;
+    const ridersActive = riders.filter((r) => r.status === 'active').length;
+
+    // Average delivery time needs both placedAt and deliveredAt on the
+    // same order — genuinely 0 (not fabricated) until enough of today's
+    // orders have actually completed with real timestamps on both ends.
+    const completedToday = todaysOrders.filter((o) => o.deliveredAt);
+    const avgDeliveryMin = completedToday.length
+      ? Math.round(
+          completedToday.reduce((s, o) => s + (new Date(o.deliveredAt!).getTime() - new Date(o.placedAt).getTime()) / 60000, 0) /
+            completedToday.length
+        )
+      : 0;
+
+    return {
+      ordersCount: todaysOrders.length,
+      gmv,
+      payoutsReleased,
+      payoutsCount: releasedToday.length,
+      refundsIssued,
+      refundsCount: refundedToday.length,
+      ridersOnline,
+      ridersActive,
+      avgDeliveryMin
+    };
+  }, [orders, withdrawals, riders]);
 
   const flagged: AttentionItem[] = React.useMemo(() => {
     const items: AttentionItem[] = [];
@@ -268,12 +319,12 @@ export function Dashboard() {
             <PanelHeader title="Today so far" meta="Osun State · all zones" />
             <dl className="grid grid-cols-2 gap-px bg-line">
               {[
-              { label: 'Orders', value: '412', sub: '+8% vs last Tue' },
-              { label: 'GMV', value: naira(4180000, { compact: true }), sub: 'settled + pending' },
-              { label: 'Payouts released', value: naira(286400, { compact: true }), sub: '9 requests' },
-              { label: 'Refunds issued', value: naira(5950), sub: '3 orders' },
-              { label: 'Riders online', value: '38', sub: 'of 71 active' },
-              { label: 'Avg delivery', value: '34 min', sub: 'target 30 min' }].
+              { label: 'Orders', value: String(todayStats.ordersCount), sub: 'today' },
+              { label: 'GMV', value: naira(todayStats.gmv, { compact: true }), sub: 'today, settled + pending' },
+              { label: 'Payouts released', value: naira(todayStats.payoutsReleased, { compact: true }), sub: `${todayStats.payoutsCount} request${todayStats.payoutsCount === 1 ? '' : 's'}` },
+              { label: 'Refunds issued', value: naira(todayStats.refundsIssued), sub: `${todayStats.refundsCount} order${todayStats.refundsCount === 1 ? '' : 's'}` },
+              { label: 'Riders online', value: String(todayStats.ridersOnline), sub: `of ${todayStats.ridersActive} active` },
+              { label: 'Avg delivery', value: todayStats.avgDeliveryMin > 0 ? `${todayStats.avgDeliveryMin} min` : '—', sub: todayStats.avgDeliveryMin > 0 ? 'today' : 'no deliveries completed yet today' }].
               map((stat) =>
               <div key={stat.label} className="bg-surface px-4 py-3">
                   <dt className="text-xs text-ink-muted">{stat.label}</dt>

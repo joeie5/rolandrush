@@ -107,6 +107,8 @@ export interface Order {
   id: string;
   code: string;
   placedAt: string;
+  deliveredAt: string | null;
+  refundAmount: number;
   status: OrderStatus;
   tier: RiskTier;
   customerId: string;

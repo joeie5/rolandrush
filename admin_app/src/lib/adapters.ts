@@ -148,6 +148,8 @@ export function mapOrder(row: Record<string, any>): Order {
     id: row.id,
     code: row.order_number ?? row.id,
     placedAt: row.created_at,
+    deliveredAt: row.delivered_at ?? null,
+    refundAmount: Number(row.refund_amount) || 0,
     status: mapOrderStatus(row.status),
     tier: row.status === 'cancelled' ? 'review' : 'auto',
     customerId: row.customer_id,
